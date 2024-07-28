@@ -1,0 +1,19 @@
+{
+    "name": "LoRaLite",
+    "version": "0.0.1",
+    "description": "A LoRa Network Based on Transceivers for ESP32",
+    "authors": [
+      {
+        "name": "Qiwei Mao",
+        "email": "your_email@example.com",
+        "url": "https://github.com/qiweimao"
+      }
+    ],
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/qiweimao/LoRaLite.git"
+    },
+    "frameworks": "arduino",
+    "platforms": "espressif32"
+  }
+  
