@@ -1,47 +1,56 @@
-### LoRaLite: A LoRa Network Based on Transceivers
+- [Overview](#overview)
+- [Features](#features)
+- [Getting Started](#getting-started)
+  - [Installation](#installation)
+  - [Setup and Initialization](#setup-and-initialization)
+  - [Folder Structure](#folder-structure)
+  - [Examples (TODO)](#examples-todo)
+- [License](#license)
 
-**Overview**
-LoRaLite is a lightweight library for building a LoRa-based communication network using ESP32 devices. This library provides functionalities for initializing LoRa communication, managing peer devices, handling file transfers, and operating both gateway and slave devices.
+# Overview
 
-**Features**
-- **Initialization**: Setup and configure the LoRa module.
-- **Gateway**: Manage communication between devices.
-- **Peers**: Add, remove, and manage peer devices.
-- **File Transfer**: Send and receive files between devices.
-- **Slave**: Implement slave functionalities within the network.
-- **Handlers and Schedule**: 
-  - **Handlers**: Functions to handle different types of messages such as pairing requests, file transfers, and polling acknowledgments.
-  - **Scheduling**: Periodic tasks like polling, time synchronization, and configuration synchronization.
+LoRaLite is a lightweight library for building a LoRa-based communication network using ESP32 devices with LoRa transceivers, without needing a LoRa Gateway. It supports managing peer devices (auto-pairing), handling file transfers (chunked transfers), and configuring devices as either master or slave.
 
-**Getting Started**
-1. **Clone the repository**:
-    ```sh
-    git clone https://github.com/qiweimao/LoRaLite.git
-    cd LoRaLite
-    ```
+This one-to-many architecture allows only the master to initiate communication, ensuring collision management and network congestion control due to LoRa transceiver limitations.
 
-2. **Setup and Initialization**:
-   - Include `lora_init.h` and call `initLoRa()` to initialize the LoRa module with the necessary parameters.
+# Features
 
-3. **Gateway Configuration**:
-   - Use `lora_gateway.h` to set up the gateway functions, including data reception and polling.
+- **Master**: Manages communication between devices.
+- **Slave**: Responds and sends files to the master in send or sync mode.
+- **Peers**: The master can add, remove, and manage peer devices, storing details like MAC address, device name, last communication time, and signal strength.
+- **Auto-pairing**: Slave devices automatically send pairing messages to the master when they wake up, allowing registration and polling by the master.
+- **File Transfer**: Facilitates sending and receiving files between devices. The master can request single file transfers or use append mode to sync with a slave folder.
+- **Customizable Handlers and Schedule**:
+  - **Handlers**: Handle different message types such as pairing requests, file transfers, and polling acknowledgments.
+  - **Scheduling**: Periodic tasks on the master device like polling, time synchronization, and configuration synchronization.
 
-4. **Peer Management**:
-   - Utilize `lora_peer.h` to manage peer devices by adding, removing, saving, and loading peers.
+# Getting Started
 
-5. **File Transfer**:
-   - Implement file transfer functionalities using `lora_file_transfer.h`.
+## Installation
 
-6. **Slave Configuration**:
-   - Configure slave devices with `lora_slave.h` to handle data reception and polling.
+```sh
+git clone https://github.com/qiweimao/LoRaLite.git
+cd LoRaLite
+```
 
-**Examples**
+## Setup and Initialization
+
+1. **Include** `LoRaLite.h`
+2. **Edit** `lora_user_settings` with necessary parameters:
+   - Customized wiring pin designations for `LORA_RST`, `DIO0`, `LORA_SCK`, `LORA_MISO`, `LORA_MOSI`, `LORA_SS`
+   - Customized message types in `enum UserMessageType`
+   - Networking parameters: `CHUNK_SIZE`, `ACK_TIMEOUT`, `POLL_TIMEOUT`
+3. **Handler Registration**: Register handlers for each customized message type defined in `enum UserMessageType`. Handlers should exit quickly to avoid blocking incoming packet processing. Use tasks for longer operations.
+4. **Schedule Registration**: Register functions to send out scheduled polling requests at set intervals, allowing the master to poll the slave.
+
+## Folder Structure
+
+The master automatically creates a `node` folder at the root of the SD card. For each new peer (slave), a folder using its device name is created inside `node`. Handlers can request data or files from the slave, storing them in the respective folder on the master device's SD card.
+
+## Examples (TODO)
+
 Refer to the `examples` directory for sample code demonstrating the setup and usage of different components in the LoRa network.
 
-**Contributing**
-Contributions are welcome! Please fork the repository and submit a pull request.
+# License
 
-**License**
 This project is licensed under the MIT License.
-
-For more information, visit the [GitHub repository](https://github.com/qiweimao/LoRaLite).
