@@ -7,8 +7,8 @@
 enum UserMessageType {
     TIME_SYNC = USER_DEFINED_START,
     GET_CONFIG,
-    DATA_CONFIG,
-    SYS_CONFIG,
+    UPDATE_DATA_CONFIG,
+    UPDATE_SYS_CONFIG,
 };
 
 //Define the pins used by the transceiver module
