@@ -139,23 +139,32 @@ void handle_pairing(const uint8_t *incomingData){
     
     Serial.println("First time pairing, create a dir for this node");
 
-    char deviceFolder[MAX_DEVICE_NAME_LEN + 1]; // 10 for the name + 1 for the null terminator
-    strncpy(deviceFolder, pairingDataGateway.deviceName, 10);
-    deviceFolder[MAX_DEVICE_NAME_LEN] = '\0'; // Ensure null-termination
+    char deviceName[MAX_DEVICE_NAME_LEN + 1]; // 10 for the name + 1 for the null terminator
+    strncpy(deviceName, pairingDataGateway.deviceName, 10);
+    deviceName[MAX_DEVICE_NAME_LEN] = '\0'; // Ensure null-termination
 
     char folderPath[MAX_DEVICE_NAME_LEN + 6]; // 1 for '/' + 4 for 'data' + 1 for '/' + 10 for the name + 1 for the null terminator
-    snprintf(folderPath, sizeof(folderPath), "/node/%s", deviceFolder);
+    snprintf(folderPath, sizeof(folderPath), "/node/%s", deviceName);
     Serial.println(folderPath);
+
+    // Check if the device folder already exists and generate a new name if it does
+    int counter = 1;
+    while (SD.exists(folderPath)) {
+      snprintf(folderPath, sizeof(folderPath), "/node/%s_%d", deviceName, counter);
+      counter++;
+    }
 
     if (SD.mkdir(folderPath)) {
       Serial.println("Directory created successfully.");
+      int index = getIndexByMac(pairingDataGateway.mac_origin);
+      String(deviceName).toCharArray(peers[index].deviceName, DEVICE_NAME_MAX_LENGTH);
     } else {
       Serial.println("Failed to create directory.");
     }
 
     // create data folder
     char datafolderPath[MAX_DEVICE_NAME_LEN + 11]; // 10 for device name + 1 for null terminator
-    snprintf(datafolderPath, sizeof(datafolderPath), "/node/%s/data", deviceFolder);
+    snprintf(datafolderPath, sizeof(datafolderPath), "/node/%s_%d/data", deviceName, counter);
     if (SD.mkdir(datafolderPath)) {
       Serial.println("Directory /data created successfully.");
     } else {
