@@ -1,6 +1,6 @@
 {
     "name": "LoRaLite",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "A LoRa Network Based on Transceivers for ESP32",
     "authors": [
       {
