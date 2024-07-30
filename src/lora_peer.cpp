@@ -118,7 +118,7 @@ void savePeersToSD() {
 }
 
 // Function to load peers from SD card
-void loadPeersFromSD() {
+void loadPeers() {
   
   if (!SPIFFS.exists(filename)) {
     Serial.println("File does not exist, skipping loading peers.");
