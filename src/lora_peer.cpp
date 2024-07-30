@@ -1,9 +1,9 @@
 #include <Arduino.h>
-#include <SD.h>
+#include <SPIFFS.h>
 #include "lora_peer.h"
 
 size_t peerCount = 0;
-const char* filename = "/peers.txt";
+const char* filename = "/peers.config";
 
 Peer peers[MAX_PEERS];
 
@@ -105,7 +105,7 @@ bool isDeviceNameValid(String deviceName) {
 
 // Function to save peers to SD card
 void savePeersToSD() {
-  File file = SD.open(filename, FILE_WRITE);
+  File file = SPIFFS.open(filename, FILE_WRITE);
   if (file) {
     file.seek(0); // Move to the beginning of the file
     for (size_t i = 0; i < peerCount; i++) {
@@ -120,12 +120,12 @@ void savePeersToSD() {
 // Function to load peers from SD card
 void loadPeersFromSD() {
   
-  if (!SD.exists(filename)) {
+  if (!SPIFFS.exists(filename)) {
     Serial.println("File does not exist, skipping loading peers.");
     return;
   }
 
-  File file = SD.open(filename, FILE_READ);
+  File file = SPIFFS.open(filename, FILE_READ);
   if (file) {
     peerCount = 0;
     while (file.available() && peerCount < MAX_PEERS) {
