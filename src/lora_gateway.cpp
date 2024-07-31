@@ -3,16 +3,15 @@
 #include "lora_file_transfer.h"
 #include "lora_peer.h"
 #include "SD.h"
+#include "SPIFFS.h"
 
-unsigned long lastPollTime = 0;
-unsigned long lastTimeSyncTime = 0;
-unsigned long lastConfigSyncTime = 0;
-const unsigned long pollInterval = 60000; // 1 minute
-const unsigned long timeSyncInterval = 60000;
-const unsigned long configSyncInterval = 60000;
-
+TimerHandle_t watchdogTimer;
+TaskHandle_t scheduled_poll_handle;
+volatile bool functionRunning = false;
 bool poll_success = false;
 int rssi = 0;
+
+void scheduled_poll(void *parameter);
 
 /******************************************************************
  *                                                                *
@@ -71,9 +70,26 @@ int waitForPollAck() {
 /******************************************************************
  *                         Control Tasks                          *
  ******************************************************************/
+
+// Schedule Watchdog
+void watchdogCallback(TimerHandle_t xTimer) {
+    // This function gets called when the timer expires
+    logErrorToSPIFFS("Error: watchdogCallback, time expired");
+    if (functionRunning) {
+        logErrorToSPIFFS("scheduled_poll task timed out. Restarting task...");
+        Serial.println("scheduled_poll task timed out. Restarting task...");
+        vTaskDelete(scheduled_poll_handle); // Terminate the stuck task
+        functionRunning = false;
+        
+        // Create the function task again
+        xTaskCreate(scheduled_poll, "FunctionTask", 2048, NULL, 1, &scheduled_poll_handle);
+    }
+}
+
 void scheduled_poll(void *parameter){
 
   while(true){
+
 
     unsigned long currentTime = millis();
 
@@ -90,22 +106,49 @@ void scheduled_poll(void *parameter){
       int isBroadcast = schedule.isBroadcast;
 
       if ((currentTime - lastPoll) >= interval) {
-        
+
         Serial.println();Serial.println("================================");
         Serial.print("Beging Schedule: "); Serial.print(i);
         Serial.print(", lastPoll: "); Serial.print(lastPoll);
         Serial.print(", interval: "); Serial.print(interval);
         Serial.print(", currentTime: "); Serial.println(currentTime);
-
+        
         lora_config.schedules[i].lastPoll = currentTime;
         for(int j = 0; j < peerCount; j++){
           
           rej_switch = 0; // turn on file transfer
 
-          if (xSemaphoreTake(xMutex_DataPoll, portMAX_DELAY) == pdTRUE) {
+          if (xSemaphoreTake(xMutex_DataPoll, 1000 / portTICK_PERIOD_MS) == pdTRUE) {
             poll_success = false;
+
+            // Start the watchdog timer
+            functionRunning = true;
+            xTimerStart(watchdogTimer, 0);
             func(j);
-            xSemaphoreGive(xMutex_DataPoll);
+            // If the function, stop the watchdog timer
+            xTimerStop(watchdogTimer, 0);
+            functionRunning = false;
+
+            if (!xSemaphoreGive(xMutex_DataPoll)) {
+              Serial.println("Error: Failed to release xMutex_DataPoll");
+              logErrorToSPIFFS("Error: Schedule: "); logErrorToSPIFFS(String(i));
+              logErrorToSPIFFS("Error: Failed to release xMutex_DataPoll");
+
+              // Attempt recovery actions, such as reinitializing resources
+              // This example just logs the attempt; real recovery logic would be more complex
+              vSemaphoreDelete(xMutex_DataPoll);
+              Serial.println("Deleted xMutex_DataPoll");
+              xMutex_DataPoll = xSemaphoreCreateMutex();
+              Serial.println("Recreated xMutex_DataPoll");
+              if (xMutex_DataPoll == NULL) {
+                Serial.println("Error: Failed to reinitialize xMutex_DataPoll");
+                logErrorToSPIFFS("Error: Failed to reinitialize xMutex_DataPoll");
+                ESP.restart();  // Reset the system as a last resort
+              }
+
+            }
+          } else {
+            Serial.println("Error: Failed to obtain xMutex_DataPoll");
           }
 
           if(isBroadcast){
@@ -115,7 +158,10 @@ void scheduled_poll(void *parameter){
 
           if(waitForPollAck()){ // check for ack before proceeding to next one
             struct tm timeinfo;
-            getLocalTime(&timeinfo);
+            if(!getLocalTime(&timeinfo)){
+              Serial.println("Failed to obtain time.");
+              logErrorToSPIFFS("Error: Failed to obtain time.");
+            }
             peers[j].lastCommTime = timeinfo;
             peers[j].status = ONLINE;
             peers[j].SignalStrength = rssi;
@@ -124,22 +170,9 @@ void scheduled_poll(void *parameter){
           }
           else{ // still in transmission or slave is non responsive
 
-            // signal_message ackMessage_gateway;
-            // ackMessage_gateway.msgType = REJ;
-            // memcpy(&ackMessage_gateway.mac, peers[j].mac, sizeof(ackMessage_gateway.mac));
-            // printMacAddress(peers[j].mac);
-            
-            // if (xSemaphoreTake(xMutex_LoRaHardware, portMAX_DELAY) == pdTRUE) {
-            //   sendLoraMessage((uint8_t *) &ackMessage_gateway, sizeof(ackMessage_gateway));
-            //   xSemaphoreGive(xMutex_LoRaHardware);
-            //   Serial.println("Schedule Time out. Sent STOP flag to slave.");
-            // }
-            // else{
-            //   Serial.println("Failed to Sent STOP flag to slave.");
-            // }
             rej_switch = true;
             Serial.println("rej_switch = true");
-            delay(1000);
+            vTaskDelay(1000 / portTICK_PERIOD_MS); // delay to allow the gateway handlers to send REJ to slaves
 
           }
         }
@@ -149,7 +182,7 @@ void scheduled_poll(void *parameter){
     }
 
     // Sleep for a short interval before next check (if needed)
-    vTaskDelay(100 / portTICK_PERIOD_MS); // Delay for 1 second
+    vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay for 1 second
   }
 }
 
@@ -164,7 +197,7 @@ void lora_gateway_init() {
   LoRa.onReceive(onReceive);
   LoRa.receive();
 
-  loadPeersFromSD();
+  loadPeers();
 
   // Ensure the "data" directory exists
   if (!SD.exists("/node")) {
@@ -190,6 +223,9 @@ void lora_gateway_init() {
 
   Serial.println("Added Data receieve handler");
 
+  // Create a watchdog timer with a timeout of 5 seconds (5000 ms)
+  watchdogTimer = xTimerCreate("WatchdogTimer", pdMS_TO_TICKS(5000), pdFALSE, (void *)0, watchdogCallback);
+
   // Create the task for the control loop
   xTaskCreate(
     scheduled_poll,    // Task function
@@ -197,7 +233,7 @@ void lora_gateway_init() {
     10000,              // Stack size in words
     NULL,               // Task input parameter
     1,                  // Priority of the task
-    NULL                // Task handle
+    &scheduled_poll_handle // Task handle
   );
   Serial.println("Added Data send handler");
 

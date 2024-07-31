@@ -299,6 +299,6 @@ void handle_file_entire(const uint8_t *incomingData){
     sendLoraMessage((uint8_t *) &ackMessage_gateway, sizeof(ackMessage_gateway));
     xSemaphoreGive(xMutex_LoRaHardware);
   }
-  Serial.println("Sent ACK");
+  // Serial.println("Sent ACK");
 
 }

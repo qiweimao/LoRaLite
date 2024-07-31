@@ -3,6 +3,7 @@
 #include "lora_gateway.h"
 #include "lora_slave.h"
 #include "SD.h"
+#include <SPIFFS.h>
 
 bool enableCRC = true; // Default CRC setting
 SPIClass loraSpi(HSPI);// Separate SPI bus for LoRa to avoid conflict with the SD Card
@@ -206,8 +207,6 @@ int addHandler(LoRaConfig *config, uint8_t messageType, LoRaMessageHandlerFunc h
 }
 
 int addSchedule(LoRaConfig *config, LoRaPollFunc func, unsigned long interval, int isBroadcast) {
-    Serial.print("Schedule count: ");Serial.println(lora_config.scheduleCount);
-    Serial.print("MAX_SCHEDULERS: ");Serial.println(MAX_SCHEDULES);
 
     if (config->scheduleCount < MAX_SCHEDULES) {
         config->schedules[config->scheduleCount].func = func;
@@ -215,8 +214,6 @@ int addSchedule(LoRaConfig *config, LoRaPollFunc func, unsigned long interval, i
         config->schedules[config->scheduleCount].lastPoll = 0;
         config->schedules[config->scheduleCount].interval = interval;
         config->scheduleCount++;
-        Serial.println("Add scheduler - OK");
-        Serial.print("Schedule count: ");Serial.println(config->scheduleCount);
         return 0;
     }
     else{
@@ -233,3 +230,42 @@ LoRaMessageHandlerFunc findHandler(LoRaConfig *config, uint8_t messageType, int 
     }
     return NULL; // No handler found
 }
+
+/******************************************************************
+ *                                                                *
+ *                      Utilities                      *
+ *                                                                *
+ ******************************************************************/
+
+
+void logErrorToSPIFFS(String message) {
+  if (!SPIFFS.begin(true)) {
+    Serial.println("Failed to mount SPIFFS");
+    return;
+  }
+
+  // Get the current time
+  struct tm timeinfo;
+  String timeString;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+    timeString = "Unknown Time";
+  } else {
+    // Format the timestamp
+    char buffer[64];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    timeString = String(buffer);
+  }
+
+  // Open the log file
+  File file = SPIFFS.open("/error_log.txt", FILE_APPEND);
+  if (!file) {
+    Serial.println("Failed to open log file");
+    return;
+  }
+
+  // Write the timestamp and message to the log file
+  file.println(timeString + " - " + message);
+  file.close();
+}
+

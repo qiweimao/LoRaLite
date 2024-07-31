@@ -125,6 +125,8 @@ void sendLoraMessage(uint8_t* data, size_t size);
 void handle_pairing(const uint8_t *incomingData);
 void lora_init(LoRaConfig *config);
 
+void logErrorToSPIFFS(String message);
+
 
 
 #endif
